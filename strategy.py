@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 class CrossSectionalSwingEngine:
-    def __init__(self, data_dict, initial_capital=100000, max_tranches=4, max_hold_days=30):
+    def __init__(self, data_dict, initial_capital=100000, max_tranches=7, max_hold_days=300):
         self.data = data_dict
         self.initial_capital = initial_capital
         self.cash = initial_capital
