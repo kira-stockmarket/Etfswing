@@ -2,19 +2,17 @@ import pandas as pd
 import numpy as np
 
 class CrossSectionalSwingEngine:
-    def __init__(self, data_dict, initial_capital=100000, max_tranches=2, max_hold_days=30):
+    def __init__(self, data_dict, initial_capital=100000, max_tranches=4, max_hold_days=30):
         self.data = data_dict
         self.initial_capital = initial_capital
         self.cash = initial_capital
-        
-        # Capped to 2 tranches (Initial buy + 1 average down)
-        self.max_tranches = max_tranches 
+        self.max_tranches = max_tranches
         self.max_hold_days = max_hold_days
         self.trade_amount = initial_capital / 60
         
         self.positions = {} 
         self.history = []
-        self.completed_trades = [] 
+        self.completed_trades = [] # <--- NEW: Tracks completed trades
         
         all_dates = pd.DatetimeIndex([])
         for df in self.data.values():
@@ -22,23 +20,17 @@ class CrossSectionalSwingEngine:
         self.dates = all_dates.sort_values()
 
     def run_backtest(self):
-        print("Pre-computing 20 DMA, 200 DMA, and Distances...")
+        print("Pre-computing 20 DMA and Distances...")
         dma_data = {}
-        dma_200_data = {}
         close_data = {}
         
         for ticker, df in self.data.items():
             df['20_DMA'] = df['Close'].rolling(window=20).mean()
-            # NEW: Calculate long-term trend
-            df['200_DMA'] = df['Close'].rolling(window=200).mean() 
             df['Dist_DMA'] = (df['Close'] - df['20_DMA']) / df['20_DMA']
-            
             dma_data[ticker] = df['Dist_DMA']
-            dma_200_data[ticker] = df['200_DMA']
             close_data[ticker] = df['Close']
             
         dist_df = pd.DataFrame(dma_data)
-        dma_200_df = pd.DataFrame(dma_200_data)
         close_df = pd.DataFrame(close_data)
         
         print("Running daily simulation...")
@@ -48,7 +40,6 @@ class CrossSectionalSwingEngine:
                 
             day_closes = close_df.loc[date]
             day_dists = dist_df.loc[date]
-            day_200 = dma_200_df.loc[date]
             
             # --- RULE 1: EXIT LOGIC ---
             tickers_to_remove = []
@@ -60,6 +51,7 @@ class CrossSectionalSwingEngine:
                 is_time_stop = pos['days_held'] >= self.max_hold_days
                 
                 if is_profit_target or is_time_stop:
+                    # Record the completed trade
                     pnl = (current_price - pos['avg_price']) * pos['shares']
                     roi = ((current_price - pos['avg_price']) / pos['avg_price']) * 100
                     exit_reason = "6% Target" if is_profit_target else "30-Day Stop"
@@ -91,29 +83,27 @@ class CrossSectionalSwingEngine:
                 if bought_today: break 
                 
                 current_price = day_closes.get(ticker, np.nan)
-                trend_200_dma = day_200.get(ticker, np.nan)
+                if pd.isna(current_price): continue
                 
-                if pd.isna(current_price) or pd.isna(trend_200_dma): continue
-                if self.cash < self.trade_amount: break
+                if self.cash < self.trade_amount:
+                    break
                     
                 shares_to_buy = self.trade_amount / current_price
                 
                 if ticker not in self.positions:
-                    # NEW: Trend Filter - Only open new positions if price is > 200 DMA
-                    if current_price > trend_200_dma:
-                        self.positions[ticker] = {
-                            'shares': shares_to_buy,
-                            'avg_price': current_price,
-                            'last_buy_price': current_price,
-                            'tranches': 1,      
-                            'days_held': 0,
-                            'first_buy_date': date 
-                        }
-                        self.cash -= self.trade_amount
-                        bought_today = True
+                    self.positions[ticker] = {
+                        'shares': shares_to_buy,
+                        'avg_price': current_price,
+                        'last_buy_price': current_price,
+                        'tranches': 1,      
+                        'days_held': 0,
+                        'first_buy_date': date # <--- NEW: Track when we first bought it
+                    }
+                    self.cash -= self.trade_amount
+                    bought_today = True
                     
                 else:
-                    # RULE 3: AVERAGING LOGIC (Capped at 2)
+                    # RULE 3: AVERAGING LOGIC
                     pos = self.positions[ticker]
                     if (current_price <= pos['last_buy_price'] * 0.975) and (pos['tranches'] < self.max_tranches):
                         total_cost = (pos['shares'] * pos['avg_price']) + self.trade_amount
@@ -141,4 +131,5 @@ class CrossSectionalSwingEngine:
         equity_df = pd.DataFrame(self.history).set_index('Date')
         trades_df = pd.DataFrame(self.completed_trades)
         
+        # Return both the equity curve AND the trade log
         return equity_df, trades_df
