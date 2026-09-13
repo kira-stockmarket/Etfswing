@@ -56,7 +56,7 @@ class CrossSectionalSwingEngine:
                 current_price = day_closes.get(ticker, np.nan)
                 if pd.isna(current_price): continue
                 
-                is_profit_target = current_price >= pos['avg_price'] * 1.06
+                is_profit_target = current_price >= pos['avg_price'] * 1.03
                 is_time_stop = pos['days_held'] >= self.max_hold_days
                 
                 if is_profit_target or is_time_stop:
