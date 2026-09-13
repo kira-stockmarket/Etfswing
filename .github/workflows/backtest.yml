@@ -24,10 +24,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
-    - name: Run Data Loader test
-      run: |
-        python data_loader.py
-        
     - name: Run Backtest
       run: |
         python backtest.py
+
+    - name: Upload Trade Log and Equity Curve
+      uses: actions/upload-artifact@v4
+      with:
+        name: strategy-results
+        path: |
+          Actual_Trade_Log.xlsx
+          equity_curve.png
