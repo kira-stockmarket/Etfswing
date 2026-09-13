@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 class CrossSectionalSwingEngine:
-    def __init__(self, data_dict, initial_capital=100000, max_tranches=4, max_hold_days=52):
+    def __init__(self, data_dict, initial_capital=1000000, max_tranches=4, max_hold_days=30):
         """
         data_dict: Dictionary mapping ticker symbols to pandas DataFrames (must contain 'Close')
         max_tranches: Maximum number of times to buy an ETF (1 initial + up to 3 average downs)
